@@ -1,0 +1,138 @@
+0000                PORTA:    =   $1700   ; GPIO for keys C-G (A7A0)
+0000                DIRA:     =   $1701   ; Data direction register for PORTA
+0000                PORTB:    =   $1702   ; GPIO for keys G#-C' and speaker (B7B0)
+0000                DIRB:     =   $1703   ; Data direction register for PORTB
+0000                SPEAKER_PIN:   =   $1702   ; Speaker is on B0
+0000                             ; 
+0800                          .ORG   $0800   
+0800                FREQ_TABLE:      
+0800   A7 03                  DW   935   ; C (261.63 Hz)
+0802   E8 02                  DW   744   ; C# (277.18 Hz)
+0804   BE 02                  DW   702   ; D (293.66 Hz)
+0806   72 02                  DW   626   ; D# (311.13 Hz)
+0808   41 3B                  DW   15169   ; E (329.63 Hz)
+080A   ED 37                  DW   14317   ; F (349.23 Hz)
+080C   D3 31                  DW   12755   ; F# (369.99 Hz)
+080E   64 2C                  DW   11364   ; G (392.00 Hz)
+0810   8C 27                  DW   10124   ; G# (415.30 Hz)
+0812   5D 25                  DW   9565   ; A (440.00 Hz)
+0814   41 21                  DW   8513   ; A# (466.16 Hz)
+0816   A0 1D                  DW   7584   ; B (493.88 Hz)
+0818   FB 1B                  DW   7163   ; C' (523.25 Hz)
+081A                             ; 
+081A                START:       
+0200                          .ORG   $0200   ; 
+0200                             ; 
+0200                             ; Initialize GPIO ports
+0200   D8                     CLD      
+0201   A9 00                  LDA   #$00   ; Set all PORTA pins as input
+0203   8D 01 17               STA   DIRA   ; Configure PORTA direction
+0206   A9 01                  LDA   #$01   ; Set bit 0 (B0) of PORTB as output, others as input
+0208   8D 03 17               STA   DIRB   ; Configure PORTB direction
+020B   A9 00                  LDA   #$00   ; Ensure speaker is off
+020D   8D 02 17               STA   SPEAKER_PIN   
+0210                             ; 
+0210                TEST_KEY:      
+0210   AD 00 17               LDA   PORTA   
+0213   89 10                  BIT   #$10   
+0215   F0 0F                  BEQ   KEY1   
+0217   89 20                  BIT   #$20   
+0219   F0 10                  BEQ   KEY2   
+021B   89 40                  BIT   #$40   
+021D   F0 11                  BEQ   KEY3   
+021F   89 80                  BIT   #$80   
+0221   F0 12                  BEQ   KEY4   
+0223   4C 10 02               JMP   TEST_KEY   
+0226                KEY1:        
+0226   A2 00                  LDX   #$00   ; 
+0228   4C 37 02               JMP   PLAY_NOTE   ; 
+022B                             ; 
+022B                KEY2:        
+022B   A2 02                  LDX   #$02   
+022D   4C 37 02               JMP   PLAY_NOTE   
+0230                KEY3:        
+0230   A2 04                  LDX   #$04   
+0232   4C 37 02               JMP   PLAY_NOTE   
+0235                             ; 
+0235                KEY4:        
+0235   A2 06                  LDX   #$06   
+0237                             ; 
+0237                PLAY_NOTE:      
+0237                             ; Calculate note index and load frequency
+0237   BD 00 08               LDA   FREQ_TABLE,X   ; Load low byte of frequency
+023A   85 00                  STA   $00   ; Store in delay counter low byte
+023C   BD 01 08               LDA   FREQ_TABLE+1,X   ; Load high byte of frequency
+023F   85 01                  STA   $01   ; Store in delay counter high byte
+0241   A2 10                  LDX   #$10   ; Set pulse count
+0243   86 04                  STX   $04   ; 
+0245                GEN_TONE:      
+0245                             ; Toggle speaker
+0245   AD 02 17               LDA   SPEAKER_PIN   ; Read speaker state
+0248   49 01                  EOR   #$01   ; Toggle bit 0 (B0)
+024A   8D 02 17               STA   SPEAKER_PIN   ; Write back to speaker    
+024D                             ; Delay for frequency
+024D   A5 00                  LDA   $00   ; Load low byte of frequency delay
+024F   85 02                  STA   $02   ; Store it in temporary register
+0251   A5 01                  LDA   $01   ; Load high byte of frequency delay
+0253   85 03                  STA   $03   ; Store it in temporary register
+0255   A4 03                  LDY   $03   ; 
+0257                DELAY_LOOP:      
+0257   A6 02                  LDX   $02   ; Load low byte of frequency delay
+0259                DELAY_INNER:      
+0259   CA                     DEX      ; Decrement low byte
+025A   D0 FD                  BNE   DELAY_INNER   ; Loop until low byte is zero
+025C   88                     DEY      ; Decrement high byte
+025D   D0 F8                  BNE   DELAY_LOOP   ; Loop until high byte is zero
+025F                             ; 
+025F                             ; Continue generating tone for the specified frequency
+025F   A5 04                  LDA   $04   
+0261   38                     SEC      
+0262   E9 01                  SBC   #01   
+0264   85 04                  STA   $04   
+0266   D0 DD                  BNE   GEN_TONE   ; Repeat until pulse count reaches zero
+0268                             ; 
+0268                             ; After generating the tone, turn the speaker off
+0268   A9 00                  LDA   #$00   
+026A   8D 02 17               STA   SPEAKER_PIN   ; Ensure speaker is off
+026D                             ; 
+026D   4C 10 02               JMP   TEST_KEY   ;            ; Return from subroutine
+0270                             ; 
+
+
+PORTA:              1700 DEFINED AT LINE 1
+                    > USED AT LINE 36
+DIRA:               1701 DEFINED AT LINE 2
+                    > USED AT LINE 29
+PORTB:              1702 DEFINED AT LINE 3
+DIRB:               1703 DEFINED AT LINE 4
+                    > USED AT LINE 31
+SPEAKER_PIN:        1702 DEFINED AT LINE 5
+                    > USED AT LINE 33
+                    > USED AT LINE 70
+                    > USED AT LINE 72
+                    > USED AT LINE 96
+FREQ_TABLE:         0800 DEFINED AT LINE 8
+                    > USED AT LINE 62
+                    > USED AT LINE 64
+START:              081A DEFINED AT LINE 23
+TEST_KEY:           0210 DEFINED AT LINE 35
+                    > USED AT LINE 45
+                    > USED AT LINE 98
+KEY1:               0226 DEFINED AT LINE 46
+                    > USED AT LINE 38
+KEY2:               022B DEFINED AT LINE 50
+                    > USED AT LINE 40
+KEY3:               0230 DEFINED AT LINE 53
+                    > USED AT LINE 42
+KEY4:               0235 DEFINED AT LINE 57
+                    > USED AT LINE 44
+PLAY_NOTE:          0237 DEFINED AT LINE 60
+                    > USED AT LINE 48
+                    > USED AT LINE 52
+                    > USED AT LINE 55
+GEN_TONE:           0245 DEFINED AT LINE 68
+                    > USED AT LINE 92
+DELAY_LOOP:         0257 DEFINED AT LINE 79
+                    > USED AT LINE 85
+DELAY_INNER:        0259 DEFINED AT LINE 81
+                    > USED AT LINE 83

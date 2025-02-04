@@ -1,0 +1,99 @@
+PORTA      = $1700    ; GPIO for keys C-G (A7A0)
+DIRA       = $1701    ; Data direction register for PORTA
+PORTB      = $1702   ; GPIO for keys G#-C' and speaker (B7B0)
+DIRB       = $1703  ; Data direction register for PORTB
+SPEAKER_PIN = $1702    ; Speaker is on B0
+
+.org $0800
+FREQ_TABLE:
+    .word 935  ; C (261.63 Hz)
+    .word 744  ; C# (277.18 Hz)
+    .word 702  ; D (293.66 Hz)
+    .word 626  ; D# (311.13 Hz)
+    .word 15169  ; E (329.63 Hz)
+    .word 14317  ; F (349.23 Hz)
+    .word 12755  ; F# (369.99 Hz)
+    .word 11364  ; G (392.00 Hz)
+    .word 10124  ; G# (415.30 Hz)
+    .word 9565   ; A (440.00 Hz)
+    .word 8513   ; A# (466.16 Hz)
+    .word 7584   ; B (493.88 Hz)
+    .word 7163   ; C' (523.25 Hz)
+
+START:
+.org $0200;
+
+    ; Initialize GPIO ports
+    CLD
+    LDA #$00         ; Set all PORTA pins as input
+    STA DIRA         ; Configure PORTA direction
+    LDA #$01         ; Set bit 0 (B0) of PORTB as output, others as input
+    STA DIRB         ; Configure PORTB direction
+    LDA #$00         ; Ensure speaker is off
+    STA SPEAKER_PIN  
+
+TEST_KEY:
+   LDA PORTA
+   BIT #$10
+   BEQ KEY1
+   BIT #$20
+   BEQ KEY2
+   BIT #$40
+   BEQ KEY3
+   BIT #$80
+   BEQ KEY4
+   JMP TEST_KEY
+KEY1: 
+    LDX #$00;
+    JMP PLAY_NOTE; 
+
+KEY2:                                                                                                                                                                                          
+    LDX #$02
+    JMP PLAY_NOTE
+KEY3: 
+    LDX #$04
+    JMP PLAY_NOTE
+
+KEY4:
+    LDX #$06
+    
+PLAY_NOTE:
+    ; Calculate note index and load frequency
+    LDA FREQ_TABLE,X ; Load low byte of frequency
+    STA $00          ; Store in delay counter low byte
+    LDA FREQ_TABLE+1,X ; Load high byte of frequency
+    STA $01          ; Store in delay counter high byte
+    LDX #$10      ; Set pulse count
+    STX $04;
+GEN_TONE:
+    ; Toggle speaker
+    LDA SPEAKER_PIN  ; Read speaker state
+    EOR #$01         ; Toggle bit 0 (B0)
+    STA SPEAKER_PIN  ; Write back to speaker    
+        ; Delay for frequency
+    LDA $00          ; Load low byte of frequency delay
+    STA $02          ; Store it in temporary register
+    LDA $01          ; Load high byte of frequency delay
+    STA $03          ; Store it in temporary register
+    LDY $03          ; 
+DELAY_LOOP:
+    LDX $02          ; Load low byte of frequency delay
+DELAY_INNER:
+    DEX              ; Decrement low byte
+    BNE DELAY_INNER  ; Loop until low byte is zero
+    DEY              ; Decrement high byte
+    BNE DELAY_LOOP   ; Loop until high byte is zero
+
+    ; Continue generating tone for the specified frequency
+    LDA $04
+    SEC
+    SBC #01
+    STA $04
+    BNE GEN_TONE     ; Repeat until pulse count reaches zero
+
+    ; After generating the tone, turn the speaker off
+    LDA #$00
+    STA SPEAKER_PIN  ; Ensure speaker is off
+
+    JMP TEST_KEY;            ; Return from subroutine
+
